@@ -1,0 +1,47 @@
+
+
+stages:
+  - test
+  - build
+  - deploy
+
+variables:
+  DOCKER_HOST: tcp://docker:2375
+
+test:
+  stage: test
+  image: python:3.9
+  services:
+    - postgres:13
+  variables:
+    POSTGRES_DB: test_db
+    POSTGRES_USER: test_user
+    POSTGRES_PASSWORD: test_password
+  before_script:
+    - cd backend
+    - pip install -r requirements.txt
+  script:
+    - pytest
+
+build:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker build -t myapp:$CI_COMMIT_SHA ./backend
+    - docker build -t myapp-frontend:$CI_COMMIT_SHA ./frontend
+    - docker push $CI_REGISTRY/myapp:$CI_COMMIT_SHA
+    - docker push $CI_REGISTRY/myapp-frontend:$CI_COMMIT_SHA
+
+deploy:
+  stage: deploy
+  image: 
+    name: bitnami/kubectl:latest
+    entrypoint: ['']
+  script:
+    - kubectl config use-context my-cluster
+    - kubectl set image deployment/myapp myapp=$CI_REGISTRY/myapp:$CI_COMMIT_SHA
+    - kubectl set image deployment/myapp-frontend myapp-frontend=$CI_REGISTRY/myapp-frontend:$CI_COMMIT_SHA
+  only:
+    - main
